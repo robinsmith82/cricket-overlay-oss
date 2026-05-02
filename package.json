@@ -1,0 +1,17 @@
+{
+  "name": "cricket-overlay",
+  "version": "0.1.0",
+  "description": "Self-hosted, transparent TV-style scorebar overlay for streaming club cricket from Play-Cricket to YouTube via OBS. One Cloudflare Worker.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250501.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.78.0"
+  }
+}

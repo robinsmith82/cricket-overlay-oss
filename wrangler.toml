@@ -1,0 +1,9 @@
+name = "cricket-overlay"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+
+# Create your own KV namespace and paste the ID here:
+#   npx wrangler kv namespace create CRICKET_CACHE
+[[kv_namespaces]]
+binding = "CRICKET_CACHE"
+id = ""
