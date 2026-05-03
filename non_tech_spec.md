@@ -14,7 +14,7 @@ Stream your club's 4th XI matches to YouTube, with a **proper TV-style scorebar*
    │                                                          │
    │                                                          │
    │ ──────────────────────────────────────────────────────── │
-   │  HATHERLEY & REDDINGS    127/4  │  DUMBLETON CC   —      │
+   │  HOME XI                 127/4  │  VISITING XI    —      │
    │                                  │                  14.2 │
    └──────────────────────────────────────────────────────────┘
                                                        Overs ↑
