@@ -1,4 +1,11 @@
-export type MatchStatus = 'live' | 'break' | 'finished' | 'unknown';
+export type MatchStatus =
+  | 'live'
+  | 'break'
+  | 'finished'
+  | 'abandoned'
+  | 'no_result'
+  | 'drawn'
+  | 'unknown';
 
 export type Batter = {
   name: string;
@@ -59,12 +66,17 @@ export type Score = {
   powerplay?: Powerplay;
   error?: string;
   stale?: boolean;
+  source?: 'play-cricket' | 'resultsvault' | 'mock';
 };
 
 export type Env = {
   CRICKET_CACHE: KVNamespace;
+  /** Optional D1 binding. When set, scrape attempts are logged to the `scrape_log` table (see migrations/). */
+  LOG_DB?: D1Database;
   PLAY_CRICKET_API_TOKEN?: string;
   ADMIN_KEY?: string;
   ADMIN_KEY_3S?: string;
   ADMIN_KEY_4S?: string;
+  /** Optional URL to scrape for fixture auto-discovery (e.g. your club's Play-Cricket home page). */
+  DISCOVERY_HOME_URL?: string;
 };

@@ -44,7 +44,7 @@ function mockRecentBalls(ballsTotal: number, wkts: number): BallEvent[] {
   return out;
 }
 
-export function generateMockScore(): Score {
+export function generateMockScore(innings: 1 | 2 = 1): Score {
   const now = new Date();
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
@@ -72,13 +72,48 @@ export function generateMockScore(): Score {
     wickets: Math.min(wickets, 3),
   };
 
+  if (innings === 2) {
+    // 2nd innings demo: home side chasing 187. Drive same wall-clock to make
+    // RR / REQ / target visible.
+    const target = 187;
+    const chaseRuns = Math.min(target + 5, runs);
+    const chaseWkts = Math.min(7, wickets);
+    return {
+      matchId: 'mock',
+      fetchedAt: now.toISOString(),
+      status: 'live',
+      innings: 2,
+      battingTeam: 'Home XI',
+      bowlingTeam: 'Visiting XI',
+      runs: chaseRuns,
+      wickets: chaseWkts,
+      overs,
+      oversTotal: 50,
+      target,
+      batters: [
+        { name: 'R. SMITH', runs: Math.floor(chaseRuns * 0.5), balls: Math.floor(balls * 0.55), notOut: true, onStrike: true },
+        { name: 'J. PATEL', runs: Math.floor(chaseRuns * 0.32), balls: Math.floor(balls * 0.4), notOut: true },
+      ],
+      bowler: {
+        name: 'A. KHAN',
+        overs: `${Math.floor(balls / 18)}.${(balls % 18) % 6}`,
+        maidens: 1,
+        runs: Math.floor(chaseRuns * 0.4),
+        wickets: Math.min(2, chaseWkts),
+      },
+      recentBalls: mockRecentBalls(balls, chaseWkts),
+      partnership: { runs: 42, balls: 38 },
+      powerplay: null,
+    };
+  }
+
   return {
     matchId: 'mock',
     fetchedAt: now.toISOString(),
     status: 'live',
     innings: 1,
-    battingTeam: 'Hatherley & Reddings CC 4th XI',
-    bowlingTeam: 'Cirencester CC 4th XI',
+    battingTeam: 'Home XI',
+    bowlingTeam: 'Visiting XI',
     runs,
     wickets,
     overs,
@@ -108,7 +143,7 @@ export async function scrapeMatch(matchId: string, env: Env): Promise<Score> {
   return scrapeViaResultsVault(matchId, env);
 }
 
-function failedScore(matchId: string, error: string): Score {
+function failedScore(matchId: string, error: string, source: 'play-cricket' | 'resultsvault'): Score {
   return {
     matchId,
     fetchedAt: new Date().toISOString(),
@@ -120,6 +155,7 @@ function failedScore(matchId: string, error: string): Score {
     wickets: 0,
     overs: '0.0',
     error,
+    source,
   };
 }
 
@@ -228,9 +264,14 @@ type RVMatch = {
 };
 
 function rvStatus(statusId: number): MatchStatus {
-  // 0  = scheduled / not started
-  // 30 = in progress (best guess from observed data)
-  // 60 = finished
+  // Observed codes:
+  //   0  = scheduled / not started (real match 7591652)
+  //   60 = finished, played to a result (real match 7671201)
+  // Best-guess until we see them in the wild:
+  //   1..29  = innings 1 in progress (mapped to 'live')
+  //   30..59 = break / mid-innings (mapped to 'live' as fallback; refine when we see codes)
+  //   61..69 = abandoned / no_result / drawn (TBD; map to 'finished' for now)
+  // Update this mapping when a real rained-off / drawn match shows up.
   if (statusId === 0) return 'unknown';
   if (statusId >= 60) return 'finished';
   return 'live';
@@ -376,13 +417,13 @@ function pickCurrentInnings(teams: RVTeam[]): { batting: RVTeam; bowling: RVTeam
 async function scrapeViaResultsVault(matchId: string, env: Env): Promise<Score> {
   try {
     const rvId = await resolveRvMatchId(matchId, env);
-    if (!rvId) return failedScore(matchId, 'mapping_missing');
+    if (!rvId) return failedScore(matchId, 'mapping_missing', 'resultsvault');
     const url = `${RV_BASE}${RV_MASTER_ENTITY_ID}/matches/${rvId}/?strmflg=3&apiid=${RV_API_ID}`;
     const res = await rvFetch(url);
-    if (!res.ok) return failedScore(matchId, `rv_${res.status}`);
+    if (!res.ok) return failedScore(matchId, `rv_${res.status}`, 'resultsvault');
     const m = (await res.json()) as RVMatch;
     const picked = pickCurrentInnings(m.MatchTeams || []);
-    if (!picked) return failedScore(matchId, 'no_teams');
+    if (!picked) return failedScore(matchId, 'no_teams', 'resultsvault');
     const innings = picked.innings;
     const battingTeam = picked.batting.team_name || (picked.batting.is_home ? m.home_name : m.away_name);
     const bowlingTeam = picked.bowling.team_name || (picked.bowling.is_home ? m.home_name : m.away_name);
@@ -431,9 +472,10 @@ async function scrapeViaResultsVault(matchId: string, env: Env): Promise<Score> 
       ...(lastDismissal ? { lastDismissal } : {}),
       ...(partnership ? { partnership } : {}),
       ...(powerplay ? { powerplay } : {}),
+      source: 'resultsvault',
     };
   } catch (e) {
-    return failedScore(matchId, e instanceof Error ? e.message : 'rv_error');
+    return failedScore(matchId, e instanceof Error ? e.message : 'rv_error', 'resultsvault');
   }
 }
 
@@ -479,16 +521,16 @@ async function scrapeViaSiteAPI(matchId: string, token: string): Promise<Score> 
     const res = await fetch(url, {
       headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
     });
-    if (!res.ok) return failedScore(matchId, `site_api_${res.status}`);
+    if (!res.ok) return failedScore(matchId, `site_api_${res.status}`, 'play-cricket');
     const json = (await res.json()) as SiteAPIResponse;
     const match = json.match_details?.[0];
-    if (!match) return failedScore(matchId, 'site_api_no_match');
+    if (!match) return failedScore(matchId, 'site_api_no_match', 'play-cricket');
 
     const innings = (match.innings || []).slice().sort(
       (a, b) => (b.innings_number ?? 0) - (a.innings_number ?? 0),
     );
     const current = innings[0];
-    if (!current) return failedScore(matchId, 'site_api_no_innings');
+    if (!current) return failedScore(matchId, 'site_api_no_innings', 'play-cricket');
 
     const battingTeam = current.team_batting_name ?? '';
     const bowlingTeam =
@@ -516,9 +558,10 @@ async function scrapeViaSiteAPI(matchId: string, token: string): Promise<Score> 
       wickets: current.wickets ?? 0,
       overs,
       ...(typeof target === 'number' ? { target } : {}),
+      source: 'play-cricket',
     };
   } catch (e) {
-    return failedScore(matchId, e instanceof Error ? e.message : 'site_api_error');
+    return failedScore(matchId, e instanceof Error ? e.message : 'site_api_error', 'play-cricket');
   }
 }
 

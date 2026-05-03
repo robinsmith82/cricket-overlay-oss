@@ -7,7 +7,7 @@ const SCOPE_LABELS: Record<string, string> = {
 
 export function renderOverlay(matchId: string, branding?: BrandingConfig, scope = ''): string {
   const safeId = matchId.replace(/[^a-zA-Z0-9_-]/g, '');
-  const brandingJson = JSON.stringify(branding ?? { sponsors: [], teams: {}, header: { logos: [] } });
+  const brandingJson = JSON.stringify(branding ?? { sponsors: [], teams: {} });
   const scopeLabel = SCOPE_LABELS[scope] ?? '';
   return `<!doctype html>
 <html lang="en">
@@ -42,7 +42,6 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
   }
   #brand .logos { display: flex; align-items: center; gap: 12px; }
   #brand img { height: 84px; width: auto; display: block; }
-  #brand.empty { display: none; }
   #brand .scope-label {
     font-size: 14px;
     font-weight: 800;
@@ -55,6 +54,7 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
     border-left: 3px solid var(--accent);
     margin-left: 4px;
   }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: #fff;
@@ -376,6 +376,23 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
     margin-top: 5px;
     font-weight: 800;
   }
+  .statuschip {
+    display: none;
+    margin-top: 5px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+  }
+  .statuschip.show { display: inline-block; }
+  .statuschip.live { color: #ff4444; }
+  .statuschip.finished { color: #aaa; }
+  .statuschip.abandoned, .statuschip.no_result { color: #ff8a3c; }
+  .statuschip.drawn { color: #6cb9ff; }
+  .statuschip.break { color: var(--accent); }
   .rates {
     display: flex;
     gap: 10px;
@@ -458,8 +475,10 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
 </head>
 <body>
 <div id="flash"><div class="flash-headline"></div><div class="flash-sub"></div></div>
-<div id="brand" class="empty">
-  <div class="logos"></div>
+<div id="brand">
+  <div class="logos">
+    <img class="header-logo" alt="" hidden />
+  </div>
   ${scopeLabel ? `<div class="scope-label">${scopeLabel}</div>` : ''}
 </div>
 <div id="wrap">
@@ -511,6 +530,7 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
         <span class="req" hidden>REQ<b id="reqVal">0.00</b></span>
       </div>
       <div class="target" hidden></div>
+      <div class="statuschip" id="statuschip"></div>
     </div>
   </div>
 </div>
@@ -519,21 +539,11 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
     var MATCH_ID = ${JSON.stringify(safeId)};
     var qs = window.location.search || '';
     var BRANDING = ${brandingJson};
-    (function renderHeaderLogos(){
-      var brandEl = document.getElementById('brand');
-      var logosEl = brandEl.querySelector('.logos');
-      var logos = (BRANDING && BRANDING.header && BRANDING.header.logos) || [];
-      if (!logos.length) { brandEl.classList.add('empty'); return; }
-      brandEl.classList.remove('empty');
-      logos.forEach(function(l){
-        if (!l || !l.imageUrl) return;
-        var img = document.createElement('img');
-        img.src = l.imageUrl;
-        img.alt = l.alt || '';
-        if (l.height) img.style.height = l.height + 'px';
-        logosEl.appendChild(img);
-      });
-    })();
+    if (BRANDING && BRANDING.headerLogoUrl) {
+      var headerLogo = document.querySelector('#brand .header-logo');
+      headerLogo.src = BRANDING.headerLogoUrl;
+      headerLogo.removeAttribute('hidden');
+    }
     var wrap = document.getElementById('wrap');
     var players = document.getElementById('players');
     var bat1 = document.getElementById('bat1');
@@ -555,6 +565,7 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
     var lastoutEl = document.getElementById('lastout');
     var lastoutDetail = lastoutEl.querySelector('.out-detail');
     var lastoutTimer = null;
+    var statusChip = document.getElementById('statuschip');
     var ratesEl = document.querySelector('.rates');
     var rrVal = document.getElementById('rrVal');
     var reqWrap = document.querySelector('.rates .req');
@@ -819,6 +830,23 @@ export function renderOverlay(matchId: string, branding?: BrandingConfig, scope 
       }
 
       liveDot.classList.toggle('live', d.status === 'live');
+
+      // Status chip — hidden for unknown / live (covered by the dot).
+      var labels = {
+        finished: 'Stumps',
+        abandoned: 'Abandoned',
+        no_result: 'No Result',
+        drawn: 'Drawn',
+        break: 'Break',
+      };
+      var chipKey = d.status && labels[d.status] ? d.status : null;
+      statusChip.className = 'statuschip';
+      if (chipKey) {
+        statusChip.classList.add('show');
+        statusChip.classList.add(chipKey);
+        statusChip.textContent = labels[chipKey];
+      }
+
       wrap.classList.add('ready');
       prev.seenFirst = true;
     }

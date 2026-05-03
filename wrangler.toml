@@ -7,3 +7,21 @@ compatibility_date = "2025-05-01"
 [[kv_namespaces]]
 binding = "CRICKET_CACHE"
 id = ""
+
+# Bundle .md files as raw text so /docs can serve non_tech_spec.md.
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
+# Optional: enable scrape audit logging in D1.
+# Run `npx wrangler d1 create cricket-logs`, paste the id below, then
+# `npx wrangler d1 execute cricket-logs --file=migrations/0001_scrape_log.sql`.
+# [[d1_databases]]
+# binding = "LOG_DB"
+# database_name = "cricket-logs"
+# database_id = ""
+
+# Optional: set the home page to scrape for fixture auto-discovery.
+# [vars]
+# DISCOVERY_HOME_URL = "https://yourclub.play-cricket.com/home"
